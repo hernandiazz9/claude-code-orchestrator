@@ -14,7 +14,7 @@ then pass `--file` so quoting never breaks it. Never print or copy the bot token
 ## Asking and waiting
 
 1. `python3 tg.py ask --id {qid} --file {msgfile}`, where qid = `{project}-{NNN}-{Txx}-{n}`.
-   Add `--attach {path}` (repeatable) for each file the agent listed as `ATTACH:`. Images go
+   Add `--attach {absolute path}` (repeatable) for each file the agent listed as `ATTACH:`. Images go
    as photos and anything else as a document, each sent as a reply to the question; replying
    to an attachment also counts as the answer.
 2. Start the wait with the Bash tool and `run_in_background: true`:

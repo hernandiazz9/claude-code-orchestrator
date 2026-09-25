@@ -3,9 +3,10 @@
 
   integrate.py test  --test CMD [--label NAME]
       Run the project's test command on the main checkout.
-  integrate.py merge --branch BRANCH --message "T04: title" [--test CMD]
+  integrate.py merge --branch BRANCH --message "T04: title" [--test CMD] [--ignore PATH]...
       Squash-merge BRANCH into the current branch as one commit. With --test, run the test
-      command afterwards and revert that commit if it fails, so main stays green.
+      command afterwards and revert that commit if it fails, so main stays green. --ignore lets
+      the plan file stay modified (unstaged) on disk; it never enters the squash commit.
 
 Prints exactly one JSON line. Full test output goes to a log file under
 <git-common-dir>/orchestrator/logs/, so it never has to enter the orchestrator's context;
@@ -59,10 +60,11 @@ def cmd_test(args):
 
 
 def cmd_merge(args):
-    dirty = git("status", "--porcelain", "--untracked-files=no").stdout.split("\n")
-    dirty = [l for l in dirty if l.strip()]
-    if dirty:
-        return out(result="dirty_main", files=[l[3:] for l in dirty][:20])
+    lines = git("status", "--porcelain", "--untracked-files=no").stdout.split("\n")
+    dirty = [l[3:] for l in lines if l.strip() and l[3:] not in args.ignore]
+    staged = [l[3:] for l in lines if l.strip() and l[0] not in " ?"]
+    if dirty or staged:
+        return out(result="dirty_main", files=sorted(set(dirty + staged))[:20])
     if git("rev-parse", "--verify", "--quiet", args.branch + "^{commit}").returncode != 0:
         return out(result="no_branch", branch=args.branch)
     ahead = git("rev-list", "--count", f"HEAD..{args.branch}").stdout.strip()
@@ -114,6 +116,8 @@ def main():
     m.add_argument("--branch", required=True)
     m.add_argument("--message", required=True)
     m.add_argument("--test")
+    m.add_argument("--ignore", action="append", default=[],
+                   help="path whose unstaged changes do not count as a dirty main (the plan file)")
     args = p.parse_args()
     if git("rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
         return out(result="error", step="start", detail="not inside a git work tree")

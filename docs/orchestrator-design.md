@@ -125,3 +125,12 @@ Skill, files and names in English; conversation in Spanish.
     - a `Log` section in the plan keeps agent ids and branches for resuming;
     - interview rounds use AskUserQuestion popups;
     - the guard hook lives in the skill's frontmatter, so it is active only in the orchestrator's session and its agents.
+48. **Agents fast-forward first (fixes 23 in practice).** In the end-to-end test on 2026-09-26, `baseRef: head` did not take effect: `.claude/settings.json` was created with the session already open, so worktrees came from `origin/main`.
+    - Every agent's first step is `git merge --ff-only <base branch>`. It is a no-op when `baseRef` works and a fix when it does not.
+    - The startup probe agent also reports its HEAD after the fast-forward, and it must equal main's HEAD.
+49. **Attachments live outside the repo (amends 46).** In the test, the agent committed the attached file to its branch, outside its Scope, because the preamble says to commit everything. Attachments now go to `/tmp/orchestrator-attach/<repo>-<task>/`, and `ATTACH:` lines carry absolute paths. Agents never edit `plans/`.
+50. **Global: start from any folder.** Hernán wants to use `/orchestrator` from any project or folder. The target repo is the one he names, or else the session folder's repo.
+    - If the target differs from the session folder, the orchestrator moves the session with the app's `change_directory` tool. The move takes effect when the turn ends, so no agent launches in that turn.
+    - Without that tool (CLI), it asks Hernán to reopen the session in the target repo.
+    - A folder without git gets an offer of `git init`.
+51. **Fewer plan commits (amends 9).** The test left 15 plan commits for 4 tasks. The plan is still saved to disk on every change, but it is committed only at approval, when a task ends (`done`, `failed` after its retry, `skipped`) and at the end. `integrate.py --ignore` lets the modified plan file sit unstaged while squash-merging.

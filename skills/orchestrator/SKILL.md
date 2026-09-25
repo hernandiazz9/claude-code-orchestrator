@@ -31,9 +31,24 @@ The guard hook of this skill is active for the rest of the session, agents inclu
 current checkout. Do not work around it. If Hernán asks you to push or deploy, tell him the
 guard blocks it in this session and give him the exact command to run himself.
 
-## 0. Start or resume
+## 0. Target repository, then start or resume
 
-Look for a plan in `plans/` whose header says `Status: active`.
+The skill is global: Hernán can start it from a session in any folder.
+
+1. Decide which repository to orchestrate: the one he names (in `$ARGUMENTS` or in the
+   conversation); otherwise the git repository of the session's folder
+   (`git rev-parse --show-toplevel`). If neither gives one, ask him which project, or open the
+   folder picker with `mcp__ccd_directory__request_directory` (no path).
+2. If that repository is not the session's folder, move the session there with
+   `mcp__ccd_directory__change_directory` (load both tools with ToolSearch). The move takes
+   effect when the current turn ends. Until then, use absolute paths, and never launch an
+   agent in the same turn, because agent worktrees come from the session's repository.
+   Without that tool (CLI), ask him to start `/orchestrator` from a session opened in that
+   repository.
+3. If the folder is a project without git, offer `git init` plus a first commit: worktrees
+   need git.
+
+Then look for a plan in `plans/` whose header says `Status: active`.
 - Found: tell Hernán where it stands (done / running / blocked / pending counts) and offer to
   resume it. On resume, go to section 7 (orphans), then section 3 (run).
 - Not found: go to section 1. If `$ARGUMENTS` says what the batch should achieve, use it as the
@@ -52,7 +67,9 @@ Look for a plan in `plans/` whose header says `Status: active`.
    - the repo is on its default branch and has no tracked changes. If not, stop and tell him.
    - `.claude/worktrees/` is in `.gitignore`.
    - `.claude/settings.json` has `"worktree": {"baseRef": "head"}`. Without it, agent
-     worktrees branch from the remote's default branch and miss every unpushed commit.
+     worktrees branch from the remote's default branch and miss every unpushed commit. A
+     settings file created or changed during this session may not take effect until a new
+     session; that is why every agent fast-forwards to the base branch first (preamble).
    - `.worktreeinclude` lists the git-ignored env and secret files a worktree needs (Claude
      Code copies them into each new worktree). Heavy data and models are not copied; agents read
      them from the main checkout by absolute path.
@@ -60,11 +77,12 @@ Look for a plan in `plans/` whose header says `Status: active`.
      fails, tell Hernán before he approves the plan; otherwise nobody can tell later which task
      broke what. Do not read the log unless it failed, and then only the tail you are given.
    - A fresh worktree works: launch a probe agent (foreground, `isolation: worktree`,
-     `subagent_type: general-purpose`) that runs the Worktree setup and then the test command,
-     changes nothing, and answers in 3 lines with each command's exit code and, on failure,
+     `subagent_type: general-purpose`) that runs, in order, `git merge --ff-only <base branch>`,
+     the Worktree setup and the test command. It changes nothing and answers in 4 lines: each
+     command's exit code, `git rev-parse --short HEAD` after the fast-forward and, on failure,
      the last error lines. Its worktree is removed automatically because it made no changes.
-     If it fails, fix `.worktreeinclude` or the setup with Hernán before approving the plan.
-     Skip this check if the plan header has no Worktree setup and no Test command.
+     That HEAD must equal main's HEAD. If it does not, or anything fails, fix
+     `.worktreeinclude`, the setup or the base with Hernán before approving the plan.
    - Permission mode is `bypassPermissions` (load `mcp__ccd_session_mgmt__get_session` and
      `mcp__ccd_session_mgmt__set_remote_control` with ToolSearch; `get_session("self")` reports
      `permissionMode` and `title`). If it is not, ask Hernán to switch before anything runs.
@@ -100,7 +118,7 @@ A task is **ready** when it is `pending` and every task it depends on is `done`.
 in plan order. Two ready tasks are independent by construction.
 
 **Launch a task**
-1. Set `Status: running (attempt n)` and add a Log line. Commit the plan (`-- plans/NNN-slug.md`).
+1. Set `Status: running (attempt n)` and add a Log line. Save the plan; do not commit it.
 2. Build the prompt from `R/agent-prompt.md`: the preamble, the task block copied verbatim and
    the final-message format.
 3. Call the Agent tool with `subagent_type: general-purpose`, `isolation: worktree`,
@@ -119,9 +137,11 @@ in plan order. Two ready tasks are independent by construction.
 **When a TIMER fires**: if that task is still running, send the watchdog notice
 (`R/telegram.md`) once; if it is not, ignore the timer.
 
-After every status change, update the plan and commit it:
-`git commit -m "plan NNN: T04 <status>" -- plans/NNN-slug.md`. Then launch whatever is now
-ready. The plan file is your memory: after a context compaction, re-read it before acting.
+Save the plan after every change: it is your memory, and after a context compaction you
+re-read it before acting. Commit it only when a task ends (`done`, `failed` after its retry,
+or `skipped`), at approval and at the end of the plan:
+`git commit -m "plan NNN: T04 done" -- plans/NNN-slug.md`. In between it stays modified on
+disk; `integrate.py` ignores it through `--ignore`. Then launch whatever is now ready.
 
 **What you may change alone:** reorder tasks, split a task that turned out too big, and add a
 small task that fixes something an earlier task broke. Log each change in Decisions. New scope
@@ -130,7 +150,7 @@ time; apply his changes to the plan and carry on.
 
 ## 4. Integrate (one task at a time, in the main checkout)
 
-Run `python3 S/integrate.py merge --branch <BRANCH> --message "T04: <title>" --test "<Test command>"`.
+Run `python3 S/integrate.py merge --branch <BRANCH> --message "T04: <title>" --test "<Test command>" --ignore plans/NNN-slug.md`.
 It prints one JSON line:
 - `merged`: set Status `done`, Outcome = one line + commit. Remove the worktree and branch:
   `git worktree remove --force <WORKTREE>` then `git branch -D <BRANCH>`.
@@ -157,7 +177,7 @@ in Decisions.
 1. Set `Status: blocked` and add a Log line with the question.
 2. Ask him on Telegram with the "decision needed" format, then start the background wait
    (`R/telegram.md`). If the agent's QUESTION has `ATTACH:` lines, pass each file as
-   `--attach <WORKTREE>/<path>`. Show the same question in the session.
+   `--attach <absolute path>`. Show the same question in the session.
 3. Keep running everything that does not depend on this task.
 4. When the answer arrives, on Telegram or on screen, send it to the same agent (SendMessage,
    "answer" message in `R/agent-prompt.md`) and set Status `running`. If the agent cannot be
@@ -225,5 +245,5 @@ because something they depend on failed or was skipped.
 - Never push, deploy or do anything irreversible or outward-facing (section 5).
 - Keep your context small. Never read agent transcripts or full logs; scripts print short
   results. Delegate code reading to an `Explore` agent that answers in a few lines.
-- Before each merge, main must be clean; `integrate.py` checks it.
+- Before each merge, main must be clean apart from the plan file; `integrate.py` checks it.
 - Message Hernán only for the cases in `R/telegram.md`. Never print the Telegram token.

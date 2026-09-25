@@ -1,7 +1,8 @@
 # Agent prompt
 
 Every task agent gets one prompt built from this file: the preamble, the task block copied
-verbatim from the plan, and the final-message format. Fill the `{…}` fields. For a continuation
+verbatim from the plan, and the final-message format. Fill the `{…}` fields ({BASE_BRANCH} is
+the plan header's Base branch). For a continuation
 (retry, answer after a fresh start, interrupted run, conflict), add the matching section at the end.
 
 ## Prompt template
@@ -14,7 +15,10 @@ Project test command: {TEST_COMMAND}
 Heavy data or models, if any, are read from the main checkout by absolute path: {MAIN_CHECKOUT}
 (never symlink them into the worktree, never write there).
 
-- Work only inside this worktree. Run "Worktree setup" first.
+- Work only inside this worktree. First run  git merge --ff-only {BASE_BRANCH}  so you start
+  from the current {BASE_BRANCH} (if it fails, stop with STATUS: failed and say why), then
+  run "Worktree setup".
+- Never edit plans/: the plan belongs to the orchestrator.
 - Context was written when the plan was made: check it against the current code before
   relying on it.
 - Stay within Scope; anything else goes under OUT OF SCOPE.
@@ -23,7 +27,8 @@ Heavy data or models, if any, are read from the main checkout by absolute path: 
 - Stop with STATUS: blocked + QUESTION (options + your recommendation) if you need new scope,
   user-visible behavior the task does not define, anything irreversible or outward-facing,
   or a permission that was denied. If a picture or a file would help Hernán decide, save it
-  in the worktree and add a line `ATTACH: <path relative to the worktree>` to QUESTION.
+  outside the repository, in /tmp/orchestrator-attach/{REPO_NAME}-{ID}/ (so it is never
+  committed), and add a line `ATTACH: <absolute path>` to QUESTION.
 - Tests assert against the source that changes, never against hand-written counts or dates
   that another task could change.
 - Python with an editable install: run everything with PYTHONPATH set to this worktree, so
@@ -47,7 +52,7 @@ DONE WHEN:
   - <command> → pass | fail (exit <code>, <counts>)
 DECISIONS: <choices you made alone, or "none">
 QUESTION: <only if blocked: the question, options A/B/…, your recommendation and why;
-          optional ATTACH: <path> lines>
+          optional ATTACH: <absolute path> lines>
 OUT OF SCOPE: <things you noticed but did not do, or "none">
 ```
 
@@ -58,7 +63,7 @@ committed any leftover changes in the old worktree as `{ID}: WIP`.
 
 **Retry after a failure**
 ```
-CONTINUATION (attempt {N}): a previous attempt failed. First run
+CONTINUATION (attempt {N}): a previous attempt failed. After the fast-forward, run
   git merge --no-edit {OLD_BRANCH}
 to bring in its work (keep it only if it helps). What failed:
 {FAILURE: the previous final message and/or the failing test tail}
@@ -66,7 +71,7 @@ to bring in its work (keep it only if it helps). What failed:
 
 **Hernán's answer (the blocked agent could not be resumed)**
 ```
-CONTINUATION: this task was blocked on a question. First run
+CONTINUATION: this task was blocked on a question. After the fast-forward, run
   git merge --no-edit {OLD_BRANCH}
 to bring in the previous work. The question was: {QUESTION}
 Hernán answered: {ANSWER}
@@ -74,7 +79,7 @@ Hernán answered: {ANSWER}
 
 **Interrupted run**
 ```
-CONTINUATION: the previous agent was interrupted before finishing. First run
+CONTINUATION: the previous agent was interrupted before finishing. After the fast-forward, run
   git merge --no-edit {OLD_BRANCH}
 to bring in its work, check what is left against Done when, and finish.
 ```
@@ -82,7 +87,7 @@ to bring in its work, check what is left against Done when, and finish.
 **Merge conflict (the original agent could not be resumed)**
 ```
 CONTINUATION: this task is finished on {OLD_BRANCH} but conflicts with main in: {FILES}.
-First run  git merge --no-edit {OLD_BRANCH}  then  git merge main , resolve the conflicts keeping
+After the fast-forward, run  git merge --no-edit {OLD_BRANCH}  (main is already in), resolve the conflicts keeping
 both intents, rerun the Done-when commands, and commit.
 ```
 
