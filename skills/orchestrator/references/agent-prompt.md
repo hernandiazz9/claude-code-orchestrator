@@ -15,12 +15,19 @@ Heavy data or models, if any, are read from the main checkout by absolute path: 
 (never symlink them into the worktree, never write there).
 
 - Work only inside this worktree. Run "Worktree setup" first.
+- Context was written when the plan was made: check it against the current code before
+  relying on it.
 - Stay within Scope; anything else goes under OUT OF SCOPE.
 - Make reversible choices yourself; list them under DECISIONS.
 - You may launch read-only subagents (for example Explore) to research; only you edit files.
 - Stop with STATUS: blocked + QUESTION (options + your recommendation) if you need new scope,
   user-visible behavior the task does not define, anything irreversible or outward-facing,
-  or a permission that was denied.
+  or a permission that was denied. If a picture or a file would help Hernán decide, save it
+  in the worktree and add a line `ATTACH: <path relative to the worktree>` to QUESTION.
+- Tests assert against the source that changes, never against hand-written counts or dates
+  that another task could change.
+- Python with an editable install: run everything with PYTHONPATH set to this worktree, so
+  you test this worktree's code and not the main checkout's.
 - Judge each Done-when command by exit code and counts, never by the word "passed".
 - Before finishing, whatever the STATUS: commit everything, as "{ID}: {TITLE}" when done or
   "{ID}: WIP" otherwise; git status must be clean.
@@ -39,7 +46,8 @@ COMMITS: <short sha> <subject>, one per line
 DONE WHEN:
   - <command> → pass | fail (exit <code>, <counts>)
 DECISIONS: <choices you made alone, or "none">
-QUESTION: <only if blocked: the question, options A/B/…, your recommendation and why>
+QUESTION: <only if blocked: the question, options A/B/…, your recommendation and why;
+          optional ATTACH: <path> lines>
 OUT OF SCOPE: <things you noticed but did not do, or "none">
 ```
 

@@ -3,9 +3,12 @@
 
 Subcommands:
   check                               verify config and bot access (never prints the token)
-  send   (--text T | --file F)        plain notice, no reply expected
-  ask    --id QID (--text T | --file F)
-                                      question; registers QID as pending
+  send   (--text T | --file F) [--attach PATH]...
+                                      plain notice, no reply expected
+  ask    --id QID (--text T | --file F) [--attach PATH]...
+                                      question; registers QID as pending. Attachments (images
+                                      as photos, other files as documents) follow the message
+                                      as replies to it; replying to them also answers QID.
   wait   --id QID [--timeout SECONDS] block until Hernán answers QID; run it in the background
   remind --id QID (--text T | --file F)
                                       reminder sent as a reply to the question message
@@ -23,6 +26,7 @@ State:  $ORCH_STATE_DIR (default ~/.claude/orchestrator/telegram).
 """
 import argparse
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -31,6 +35,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 DEFAULT_CONFIG = "/Users/heralc/Desktop/HDDev/H-VOICE-CREEATOR/config.json"
 POLL_SECONDS = 25
@@ -53,12 +58,16 @@ class Api:
         self.chat_id = str(tg["chat_id"])
 
     def call(self, method, params, timeout=40):
-        url = f"https://api.telegram.org/bot{self._token}/{method}"
         data = urllib.parse.urlencode(
             {k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in params.items()}
         ).encode()
+        return self._post(method, data, {}, timeout)
+
+    def _post(self, method, data, headers, timeout):
+        url = f"https://api.telegram.org/bot{self._token}/{method}"
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, data=data), timeout=timeout) as r:
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
                 body = json.load(r)
         except urllib.error.HTTPError as e:
             try:
@@ -77,6 +86,34 @@ class Api:
             params["reply_to_message_id"] = reply_to
             params["allow_sending_without_reply"] = "true"
         return self.call("sendMessage", params)["message_id"]
+
+    def attach(self, path, reply_to=None):
+        """Send a file: images as photos (up to 10 MB), anything else as a document."""
+        is_photo = (os.path.splitext(path)[1].lower() in PHOTO_EXTENSIONS
+                    and os.path.getsize(path) <= 10 * 1024 * 1024)
+        method, field = ("sendPhoto", "photo") if is_photo else ("sendDocument", "document")
+        fields = {"chat_id": self.chat_id}
+        if reply_to:
+            fields.update(reply_to_message_id=reply_to, allow_sending_without_reply="true")
+        data, content_type = multipart(fields, field, path)
+        return self._post(method, data, {"Content-Type": content_type}, 120)["message_id"]
+
+
+PHOTO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def multipart(fields, file_field, path):
+    boundary = uuid.uuid4().hex
+    name = re.sub(r'[^A-Za-z0-9._-]', "_", os.path.basename(path)) or "file"
+    ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+             for k, v in fields.items()]
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{file_field}"; '
+                 f'filename="{name}"\r\nContent-Type: {ctype}\r\n\r\n'.encode())
+    with open(path, "rb") as f:
+        parts.append(f.read())
+    parts.append(f"\r\n--{boundary}--\r\n".encode())
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
 class State:
@@ -293,6 +330,9 @@ def main(argv=None):
         g = sp.add_mutually_exclusive_group(required=True)
         g.add_argument("--text")
         g.add_argument("--file")
+        if name != "remind":
+            sp.add_argument("--attach", action="append", default=[],
+                            help="file sent right after the message, as a reply to it (repeatable)")
     sp = sub.add_parser("wait")
     sp.add_argument("--id", type=_qid, required=True)
     sp.add_argument("--timeout", type=float, default=None)
@@ -315,13 +355,22 @@ def main(argv=None):
         me = api.call("getMe", {})
         print(f"OK bot=@{me.get('username')} chat configured")
         return 0
+    for path in getattr(args, "attach", []):
+        if not os.path.isfile(path):
+            print(f"ERROR attachment not found: {path}", file=sys.stderr)
+            return 2
     if args.cmd == "send":
-        print(f"SENT message_id={api.send(_text(args))}")
+        mid = api.send(_text(args))
+        for path in args.attach:
+            api.attach(path, reply_to=mid)
+        print(f"SENT message_id={mid} attachments={len(args.attach)}")
         return 0
     if args.cmd == "ask":
         mid = api.send(_text(args))
         state.add_pending(args.id, mid)
-        print(f"ASKED {args.id} message_id={mid}")
+        for path in args.attach:
+            state.add_alias(args.id, api.attach(path, reply_to=mid))
+        print(f"ASKED {args.id} message_id={mid} attachments={len(args.attach)}")
         return 0
     if args.cmd == "remind":
         info = state.get_pending(args.id)

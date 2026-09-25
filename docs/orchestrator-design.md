@@ -112,3 +112,16 @@ Skill, files and names in English; conversation in Spanish.
 
     What breaks gets fixed, and then Hernán tries it himself.
 44. **Local copies of the interview skills.** Once `grill-me` and `grilling` are installed globally (12), the copies in this folder are deleted: `.agents/skills/`, their links in `.claude/skills/` and `skills-lock.json`. That way they do not show up twice when working here.
+45. **Safeguards carried over from the old method's measured pitfalls.** Hernán asked for Claude's recommendation, and Claude recommended all four:
+    - The agent preamble tells agents that Context may be stale and must be checked against the code.
+    - Tests assert against the source that changes, not against hand-written counts or dates.
+    - In Python projects with an editable install, `PYTHONPATH` points at the worktree.
+    - At startup, a probe agent in a fresh worktree runs the Worktree setup and the test command before the plan is approved.
+46. **Attachments on Telegram.** A blocked agent can save a picture or file in its worktree and list it as `ATTACH: <path>` in QUESTION. The orchestrator sends it after the question, as a reply to it: images as photos, anything else as documents. Replying to an attachment also answers the question.
+47. **Mechanics added while building.** None of these changes a decision:
+    - the hand-back also carries `BRANCH` and `WORKTREE`;
+    - an unfinished agent commits `T04: WIP`, so a continuation agent can pick it up;
+    - a `skipped` status covers "saltear";
+    - a `Log` section in the plan keeps agent ids and branches for resuming;
+    - interview rounds use AskUserQuestion popups;
+    - the guard hook lives in the skill's frontmatter, so it is active only in the orchestrator's session and its agents.

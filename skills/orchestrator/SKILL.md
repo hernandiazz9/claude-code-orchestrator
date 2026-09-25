@@ -59,6 +59,12 @@ Look for a plan in `plans/` whose header says `Status: active`.
    - The test command passes on main: `python3 S/integrate.py test --test "<cmd>"`. If it
      fails, tell Hernán before he approves the plan; otherwise nobody can tell later which task
      broke what. Do not read the log unless it failed, and then only the tail you are given.
+   - A fresh worktree works: launch a probe agent (foreground, `isolation: worktree`,
+     `subagent_type: general-purpose`) that runs the Worktree setup and then the test command,
+     changes nothing, and answers in 3 lines with each command's exit code and, on failure,
+     the last error lines. Its worktree is removed automatically because it made no changes.
+     If it fails, fix `.worktreeinclude` or the setup with Hernán before approving the plan.
+     Skip this check if the plan header has no Worktree setup and no Test command.
    - Permission mode is `bypassPermissions` (load `mcp__ccd_session_mgmt__get_session` and
      `mcp__ccd_session_mgmt__set_remote_control` with ToolSearch; `get_session("self")` reports
      `permissionMode` and `title`). If it is not, ask Hernán to switch before anything runs.
@@ -79,6 +85,8 @@ Look for a plan in `plans/` whose header says `Status: active`.
      commands and expected results), Depends on.
    - the header: Goal, Test command, Worktree setup.
    Mark dependencies carefully: only tasks with no path between them may run in parallel.
+   Run the fresh-worktree check from section 1 once the Test command and Worktree setup are
+   known.
 3. Write the plan from `R/plan-template.md`, with every task `pending`. Show Hernán a compact
    summary in Spanish (one line per task, with dependencies).
 4. Nothing runs until he approves it explicitly. Then commit it:
@@ -148,7 +156,8 @@ in Decisions.
 
 1. Set `Status: blocked` and add a Log line with the question.
 2. Ask him on Telegram with the "decision needed" format, then start the background wait
-   (`R/telegram.md`). Show the same question in the session.
+   (`R/telegram.md`). If the agent's QUESTION has `ATTACH:` lines, pass each file as
+   `--attach <WORKTREE>/<path>`. Show the same question in the session.
 3. Keep running everything that does not depend on this task.
 4. When the answer arrives, on Telegram or on screen, send it to the same agent (SendMessage,
    "answer" message in `R/agent-prompt.md`) and set Status `running`. If the agent cannot be
