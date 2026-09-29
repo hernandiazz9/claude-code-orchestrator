@@ -1,8 +1,8 @@
 # Telegram
 
 The orchestrator writes to Hernán on Telegram at once in three cases: it needs his decision, a
-task failed twice, or the plan finished. It also sends the watchdog notice (an agent running over
-3 hours) and at most one reminder per question. Nothing else: no per-task progress.
+task failed twice, or the plan finished. It also sends at most one reminder per question. There is
+no watchdog notice: timers were removed (Hernán, 2026-09-29). Nothing else: no per-task progress.
 
 Messages are in Spanish and start with `[{project}]`. They do not name the task id. Questions
 carry the options with the recommended one marked, and every message ends with the session
@@ -52,12 +52,6 @@ Respondé con «Responder» a este mensaje (A, B o texto libre), o en la sesión
 A) Reintentar  B) Saltear  C) Otra instrucción  ← recomiendo: {letra y por qué}
 Sesión «{session title}» → https://claude.ai/code
 Respondé con «Responder» a este mensaje, o en la sesión.
-```
-
-**Watchdog** (sent with `tg.py send`)
-```
-[{project}] Un agente lleva más de 3 horas: {qué hace, en pocas palabras}. No lo corto.
-Sesión «{session title}» → https://claude.ai/code
 ```
 
 **Reminder** (sent with `tg.py remind`, as a reply to the question)

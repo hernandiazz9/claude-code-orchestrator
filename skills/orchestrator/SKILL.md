@@ -101,7 +101,8 @@ Then look for a plan in `plans/` whose header says `Status: active`.
      a small step.
    - each task's fields: Goal, Context, Scope (may touch / must not touch), Done when (concrete
      commands and expected results), Depends on.
-   - the header: Goal, Test command, Worktree setup.
+   - the header: Goal, Test command, Worktree setup, and Status file if the project keeps a
+     shared status log that every task updates (e.g. ESTADO.md, CHANGELOG.md).
    Mark dependencies carefully: only tasks with no path between them may run in parallel.
    Run the fresh-worktree check from section 1 once the Test command and Worktree setup are
    known.
@@ -124,7 +125,10 @@ in plan order. Two ready tasks are independent by construction.
 3. Call the Agent tool with `subagent_type: general-purpose`, `isolation: worktree`,
    `run_in_background: true`, `description: "T04 · <title>"`. Write the returned agent id into
    the Log line.
-4. Start the watchdog: Bash `python3 S/timer.py 10800 T04` with `run_in_background: true`.
+
+No watchdog timers (Hernán, 2026-09-29): do not start `timer.py` or any other background
+timer. A stuck agent is found by looking at its worktree when Hernán asks, or on resume
+(section 7).
 
 **When an agent's notification arrives**, read only its final message.
 - `done`: check it quickly. `git -C <WORKTREE> status --porcelain` must be empty, and the branch
@@ -133,9 +137,6 @@ in plan order. Two ready tasks are independent by construction.
 - `failed`, or a final message that breaks the format, has no commits, or reports a failing
   Done-when command: go to section 6.
 - Append its DECISIONS to the plan's Decisions section and its OUT OF SCOPE items to Proposals.
-
-**When a TIMER fires**: if that task is still running, send the watchdog notice
-(`R/telegram.md`) once; if it is not, ignore the timer.
 
 Save the plan after every change: it is your memory, and after a context compaction you
 re-read it before acting. Commit it only when a task ends (`done`, `failed` after its retry,
@@ -150,7 +151,10 @@ time; apply his changes to the plan and carry on.
 
 ## 4. Integrate (one task at a time, in the main checkout)
 
-Run `python3 S/integrate.py merge --branch <BRANCH> --message "T04: <title>" --test "<Test command>" --ignore plans/NNN-slug.md`.
+Run `python3 S/integrate.py merge --branch <BRANCH> --message "T04: <title>" --test "<Test command>" --ignore plans/NNN-slug.md`,
+adding `--status-file <Status file>` when the plan header has one. The script then moves the
+task's status fragment (`.orchestrator/status/T04.md`) into that shared file inside the squash
+commit, so parallel tasks never conflict on it.
 It prints one JSON line:
 - `merged`: set Status `done`, Outcome = one line + commit. Remove the worktree and branch:
   `git worktree remove --force <WORKTREE>` then `git branch -D <BRANCH>`.

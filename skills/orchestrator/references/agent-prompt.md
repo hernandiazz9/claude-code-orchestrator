@@ -2,7 +2,10 @@
 
 Every task agent gets one prompt built from this file: the preamble, the task block copied
 verbatim from the plan, and the final-message format. Fill the `{…}` fields ({BASE_BRANCH} is
-the plan header's Base branch). For a continuation
+the plan header's Base branch). {STATUS_FILE_RULE} is, when the plan header has
+`Status file: <path>`: "never edit <path>. Write the section the plan asks you to add to it into
+`.orchestrator/status/{ID}.md` (same format, heading included) and commit it; the orchestrator
+moves it into <path> when it integrates your branch." Without a Status file, drop that line. For a continuation
 (retry, answer after a fresh start, interrupted run, conflict), add the matching section at the end.
 
 ## Prompt template
@@ -34,6 +37,11 @@ Heavy data or models, if any, are read from the main checkout by absolute path: 
 - Python with an editable install: run everything with PYTHONPATH set to this worktree, so
   you test this worktree's code and not the main checkout's.
 - Judge each Done-when command by exit code and counts, never by the word "passed".
+- Save time on slow suites: while working, run only the tests that cover what you change
+  (unit tests of the touched packages, the e2e specs you add or that exercise your files).
+  Run the full Done-when commands once, at the end. If a slow suite then fails only by
+  timeouts under load, rerun just the failing specs (or with fewer workers), not everything.
+- Status file: {STATUS_FILE_RULE}
 - Before finishing, whatever the STATUS: commit everything, as "{ID}: {TITLE}" when done or
   "{ID}: WIP" otherwise; git status must be clean.
 - Never push. Never rename the session.

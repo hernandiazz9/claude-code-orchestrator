@@ -15,6 +15,7 @@ Base branch: {main}
 Goal: {one short paragraph: what this batch achieves and why}
 Test command: {command that runs the project's tests, or "none"}
 Worktree setup: {command a fresh worktree needs, e.g. "npm ci", or "none"}
+Status file: {shared status log every task updates, e.g. ESTADO.md; omit the line if none}
 
 ## Tasks
 
