@@ -126,8 +126,8 @@ in plan order. Two ready tasks are independent by construction.
    `run_in_background: true`, `description: "T04 · <title>"`. Write the returned agent id into
    the Log line.
 
-No watchdog timers (Hernán, 2026-09-29): do not start `timer.py` or any other background
-timer. A stuck agent is found by looking at its worktree when Hernán asks, or on resume
+No watchdog timers (Hernán, 2026-09-29, repeated 2026-09-30): never start a background timer,
+sleep loop or scheduled check for a running agent (`timer.py` was deleted). A stuck agent is found by looking at its worktree when Hernán asks, or on resume
 (section 7).
 
 **When an agent's notification arrives**, read only its final message.
